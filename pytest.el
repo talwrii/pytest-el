@@ -90,6 +90,10 @@
 (defcustom pytest-cmd-format-string "cd '%s' && %s %s '%s'"
   "Format string used to run the py.test command.")
 
+(defvar pytest-last-command nil "Last pytest command run")
+
+(defvar pytest-last-flags nil "Last pytest flags used to run command")
+
 (defun pytest-cmd-format (format-string working-directory test-runner command-flags test-names)
   "Create the string used for running the py.test command.
 FORMAT-STRING is a template string used by (format) to compose
@@ -124,11 +128,23 @@ Optional argument FLAGS py.test command line flags."
                       ((stringp tests) (split-string tests))))
          (tnames (mapconcat (apply-partially 'format "'%s'") tests " "))
          (cmd-flags (if flags flags pytest-cmd-flags))
+         (command (pytest-cmd-format pytest-cmd-format-string where pytest cmd-flags tnames)))
+    (setq pytest-last-command command)
+    (setq pytest-last-flags cmd-flags)
+    (pytest--run-command command cmd-flags)))
+
+(defun pytest-again ()
+  "Rerun the last pytest."
+  (interactive)
+  (pytest--run-command pytest-last-command pytest-last-flags))
+
+(defun pytest--run-command (command cmd-flags)
+  "Run shell `COMMAND' using `compilation-mode' taking `FLAGS' into account."
+  (let* (
          (use-comint (s-contains? "pdb" cmd-flags)))
     (funcall #'(lambda (command)
                  (compilation-start command use-comint
-                                    (lambda (mode) (concat (pytest-get-temp-buffer-name)))))
-             (pytest-cmd-format pytest-cmd-format-string where pytest cmd-flags tnames))
+                                    (lambda (mode) (concat (pytest-get-temp-buffer-name))))) command)
     (if use-comint
 	(with-current-buffer (get-buffer (pytest-get-temp-buffer-name))
 	  (inferior-python-mode)))))
